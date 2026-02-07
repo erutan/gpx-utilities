@@ -163,6 +163,7 @@ def collect_input_files(args):
 
 
 def main():
+    """Parse arguments and combine waypoints from multiple GPX files."""
     parser = argparse.ArgumentParser(
         description='Combine waypoints from multiple GPX files into a single GPX file.',
         formatter_class=argparse.RawDescriptionHelpFormatter,

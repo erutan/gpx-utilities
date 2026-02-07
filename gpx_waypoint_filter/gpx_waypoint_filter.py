@@ -6,6 +6,7 @@ Supports complex AND/OR logic between different filter groups.
 """
 
 import argparse
+import copy
 import sys
 from pathlib import Path
 from typing import Set, List, Optional, Dict, Any
@@ -134,29 +135,9 @@ def filter_waypoints(input_file: str, output_file: str, criteria: Dict[str, Any]
             continue
         
         unique_waypoints.add(waypoint_id)
-        
-        # Create new waypoint with core attributes
-        new_waypoint = gpxpy.gpx.GPXWaypoint(
-            latitude=waypoint.latitude,
-            longitude=waypoint.longitude,
-            elevation=waypoint.elevation,
-            time=waypoint.time,
-            name=waypoint.name,
-            description=waypoint.description,
-            symbol=waypoint.symbol,
-            type=waypoint.type,
-            comment=waypoint.comment
-        )
-        
-        # Copy additional attributes if they exist
-        if hasattr(waypoint, 'source') and hasattr(new_waypoint, 'source'):
-            new_waypoint.source = waypoint.source
-        
-        # Copy extensions if present
-        if waypoint.extensions:
-            new_waypoint.extensions = waypoint.extensions
-        
-        filtered_gpx.waypoints.append(new_waypoint)
+
+        # Deep copy to preserve all attributes including extensions
+        filtered_gpx.waypoints.append(copy.deepcopy(waypoint))
     
     # Write filtered GPX to output file
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -213,6 +194,7 @@ def print_verbose_info(args: argparse.Namespace) -> None:
 
 
 def main():
+    """Parse arguments and filter waypoints from a GPX file."""
     parser = argparse.ArgumentParser(
         description='Filter waypoints from a GPX file based on name, symbol, time, and location criteria.',
         formatter_class=argparse.RawDescriptionHelpFormatter,

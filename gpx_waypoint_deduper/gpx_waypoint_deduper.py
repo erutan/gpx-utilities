@@ -134,6 +134,7 @@ class GPXDeduplicator:
             return False
 
 def main():
+    """Parse arguments and deduplicate waypoints in a GPX file."""
     parser = argparse.ArgumentParser(
         description='Remove duplicate waypoints from GPX files',
         formatter_class=argparse.RawDescriptionHelpFormatter,

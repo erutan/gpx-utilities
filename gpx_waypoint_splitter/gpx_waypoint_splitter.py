@@ -99,6 +99,7 @@ def create_output_files(waypoints, header, namespace, output_prefix, waypoints_p
     return total_written
 
 def main():
+    """Parse arguments and split a GPX file into smaller files."""
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Split a GPX file into multiple smaller files')
     parser.add_argument('input_file', help='Input GPX file to split')
