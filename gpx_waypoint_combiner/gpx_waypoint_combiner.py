@@ -31,7 +31,7 @@ class GPXCombiner:
             return waypoints
             
         except (ET.ParseError, FileNotFoundError) as e:
-            print(f"Error reading {filepath}: {e}")
+            print(f"Error reading {filepath}: {e}", file=sys.stderr)
             return []
     
     def create_combined_gpx(self, all_waypoints, metadata=None):
@@ -133,7 +133,7 @@ def collect_input_files(args):
     if args.directory:
         directory = Path(args.directory)
         if not directory.exists():
-            print(f"Error: Directory {args.directory} does not exist")
+            print(f"Error: Directory {args.directory} does not exist", file=sys.stderr)
             sys.exit(1)
         
         pattern = '**/*.gpx' if args.recursive else '*.gpx'
@@ -149,10 +149,17 @@ def collect_input_files(args):
             elif path.exists():
                 input_files.append(path)
             else:
-                print(f"Warning: File not found: {pattern}")
+                print(f"Warning: File not found: {pattern}", file=sys.stderr)
     
-    # Remove duplicates and convert to strings
-    return list(set(str(f) for f in input_files))
+    # Remove duplicates while preserving order, then sort for determinism
+    seen = set()
+    unique_files = []
+    for f in input_files:
+        s = str(f)
+        if s not in seen:
+            seen.add(s)
+            unique_files.append(s)
+    return sorted(unique_files)
 
 
 def main():
@@ -211,7 +218,7 @@ Advanced Combinations:
     input_files = collect_input_files(args)
     
     if not input_files:
-        print("Error: No input files specified or found")
+        print("Error: No input files specified or found", file=sys.stderr)
         parser.print_help()
         sys.exit(1)
     

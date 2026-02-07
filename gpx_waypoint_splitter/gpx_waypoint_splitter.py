@@ -5,10 +5,10 @@ Usage: python gpx_splitter.py input.gpx [output_prefix] [--waypoints-per-file=10
 """
 
 import sys
-import os
 import xml.etree.ElementTree as ET
 import re
 import argparse
+from pathlib import Path
 
 def parse_gpx(gpx_file):
     """Parse a GPX file and extract all waypoints."""
@@ -52,38 +52,40 @@ def parse_gpx(gpx_file):
 def create_output_files(waypoints, header, namespace, output_prefix, waypoints_per_file=1000):
     """Split waypoints into multiple files with specified number of waypoints each."""
     total_waypoints = len(waypoints)
-    
+
     # Calculate number of output files needed
     num_files = (total_waypoints + waypoints_per_file - 1) // waypoints_per_file  # Ceiling division
-    
+
     print(f"Splitting {total_waypoints} waypoints into {num_files} files with up to {waypoints_per_file} waypoints each")
     total_written = 0
-    
+
+    # Register namespace once before the loop
+    ET.register_namespace('', namespace.get('gpx', ''))
+
     # Create each output file
     for file_num in range(num_files):
         start_idx = file_num * waypoints_per_file
         end_idx = min((file_num + 1) * waypoints_per_file, total_waypoints)
-        
+
         # Create a new GPX tree
         new_root = ET.Element(header.tag, header.attrib)
-        
+
         # Copy over metadata and other non-waypoint elements
         for child in header:
             # Skip waypoint elements in the original header
             if 'wpt' not in child.tag:
                 new_root.append(ET.fromstring(ET.tostring(child)))
-        
+
         # Add waypoints for this file
         current_waypoints = waypoints[start_idx:end_idx]
         for wpt in current_waypoints:
             new_root.append(ET.fromstring(ET.tostring(wpt)))
-        
+
         # Create the output file name
         output_file = f"{output_prefix}_{file_num + 1:03d}.gpx"
-        
+
         # Write the new GPX file
         tree = ET.ElementTree(new_root)
-        ET.register_namespace('', namespace.get('gpx', ''))
         tree.write(output_file, encoding='utf-8', xml_declaration=True)
         
         waypoints_in_file = len(current_waypoints)
@@ -114,7 +116,7 @@ def main():
     gpx_file = args.input_file
     
     # Use input filename as prefix if not specified
-    output_prefix = args.output_prefix if args.output_prefix else os.path.splitext(gpx_file)[0]
+    output_prefix = args.output_prefix if args.output_prefix else Path(gpx_file).stem
     
     # Parse the GPX file
     waypoints, header, namespace, waypoint_count = parse_gpx(gpx_file)

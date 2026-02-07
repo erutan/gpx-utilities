@@ -62,6 +62,9 @@ class GPXDeduplicator:
     
     def process_gpx(self, input_file, output_file=None):
         """Process GPX file and remove duplicates"""
+        self.seen_items = {}
+        self.duplicates_removed = 0
+        self.total_waypoints = 0
         try:
             # Parse GPX file
             tree = ET.parse(input_file)
