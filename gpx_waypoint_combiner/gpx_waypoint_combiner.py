@@ -68,10 +68,12 @@ class GPXCombiner:
                 elem.text = i + "  "
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
+            last_child = None
             for child in elem:
                 self.indent(child, level + 1)
-            if not child.tail or not child.tail.strip():
-                child.tail = i
+                last_child = child
+            if last_child is not None and (not last_child.tail or not last_child.tail.strip()):
+                last_child.tail = i
         else:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = i
@@ -118,8 +120,8 @@ class GPXCombiner:
             
             return True
             
-        except Exception as e:
-            print(f"Error saving file: {e}")
+        except (PermissionError, OSError) as e:
+            print(f"Error saving file: {e}", file=sys.stderr)
             return False
 
 

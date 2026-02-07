@@ -45,8 +45,8 @@ def parse_gpx(gpx_file):
         
         return waypoints, header, ns, waypoint_count
     
-    except Exception as e:
-        print(f"Error parsing GPX file: {e}")
+    except (ET.ParseError, FileNotFoundError, PermissionError) as e:
+        print(f"Error parsing GPX file: {e}", file=sys.stderr)
         sys.exit(1)
 
 def create_output_files(waypoints, header, namespace, output_prefix, waypoints_per_file=1000):
@@ -122,7 +122,10 @@ def main():
     if args.verbose:
         print(f"Detailed waypoints information:")
         print(f"Total waypoints array length: {len(waypoints)}")
-        print(f"First waypoint index: 0, Last waypoint index: {len(waypoints) - 1}")
+        if waypoints:
+            print(f"First waypoint index: 0, Last waypoint index: {len(waypoints) - 1}")
+        else:
+            print("No waypoints found in file.")
     
     # Create output files
     total_written = create_output_files(waypoints, header, namespace, output_prefix, args.waypoints_per_file)
