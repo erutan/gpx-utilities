@@ -7,7 +7,7 @@ Combines waypoints from multiple GPX files into a single GPX file.
 import xml.etree.ElementTree as ET
 import sys
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -53,7 +53,7 @@ class GPXCombiner:
                     elem.text = metadata[tag]
             
             time_elem = ET.SubElement(meta, 'time')
-            time_elem.text = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+            time_elem.text = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # Add waypoints directly
         root.extend(all_waypoints)

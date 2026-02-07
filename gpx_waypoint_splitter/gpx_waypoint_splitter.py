@@ -107,7 +107,10 @@ def main():
                         help='Enable verbose output for debugging')
     
     args = parser.parse_args()
-    
+
+    if args.waypoints_per_file < 1:
+        parser.error("--waypoints-per-file must be a positive integer")
+
     gpx_file = args.input_file
     
     # Use input filename as prefix if not specified

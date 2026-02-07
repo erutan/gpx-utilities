@@ -56,7 +56,7 @@ class GPXDeduplicator:
         elif self.strategy == 'hash':
             # Create consistent XML string representation
             wpt_str = ET.tostring(wpt, encoding='unicode').strip()
-            return hashlib.md5(wpt_str.encode()).hexdigest()
+            return hashlib.sha256(wpt_str.encode()).hexdigest()
             
         return None
     
@@ -104,9 +104,7 @@ class GPXDeduplicator:
             
             # Remove duplicates
             for wpt in to_remove:
-                parent = wpt.getparent()
-                if parent is not None:
-                    parent.remove(wpt)
+                root.remove(wpt)
             
             # Determine output path
             if output_file is None:
