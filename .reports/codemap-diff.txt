@@ -1,0 +1,22 @@
+Codemap Diff Report
+===================
+Generated: 2026-02-07
+Project: gpx-utilities
+
+Status: INITIAL GENERATION (no previous codemaps found)
+
+Files created:
+  codemaps/architecture.md  — Overall architecture, module layout, dependency graph
+  codemaps/backend.md       — Module details, classes, functions, import map
+  codemaps/frontend.md      — CLI interfaces (no UI frontend)
+  codemaps/data.md          — GPX schema, internal data structures, file I/O
+
+Diff from previous version: N/A (first generation)
+Change percentage: 100% (new)
+
+Summary:
+  - 4 Python CLI modules identified (combiner, deduper, filter, splitter)
+  - 1 external dependency (gpxpy)
+  - 79 tests, 92% coverage
+  - No cross-module dependencies
+  - No frontend layer (CLI only)
