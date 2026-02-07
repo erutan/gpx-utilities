@@ -68,25 +68,25 @@ class RadiacodeConverter:
         gpx_segment = gpxpy.gpx.GPXTrackSegment()
         gpx_track.segments.append(gpx_segment)
 
-        for m in markers:
+        for i, m in enumerate(markers):
             lat = m.get('lat')
             lon = m.get('lon')
             date = m.get('date')
             if lat is None or lon is None or date is None:
                 if self.verbose:
-                    print(f"Warning: Skipping marker with missing coordinates or timestamp")
+                    print(f"Warning: Skipping marker {i} with missing coordinates or timestamp")
                 continue
 
             if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
                 if self.verbose:
-                    print(f"Warning: Skipping marker with out-of-range coordinates ({lat}, {lon})")
+                    print(f"Warning: Skipping marker {i} with out-of-range coordinates ({lat}, {lon})")
                 continue
 
             try:
                 dt = datetime.fromtimestamp(date, tz=timezone.utc)
             except (TypeError, ValueError, OSError):
                 if self.verbose:
-                    print(f"Warning: Skipping marker with invalid timestamp: {date}")
+                    print(f"Warning: Skipping marker {i} with invalid timestamp: {date}")
                 continue
 
             point = gpxpy.gpx.GPXTrackPoint(

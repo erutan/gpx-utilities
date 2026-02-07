@@ -15,7 +15,7 @@ A Python script for converting Radiacode `.rctrk` track files to GPX format. Cre
 
 ### Requirements
 
-- Python 3.6 or higher
+- Python 3.8 or higher
 - gpxpy
 
 ### Setup

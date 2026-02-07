@@ -293,7 +293,7 @@ def test_marker_missing_date(capsys):
 
         assert success is True
         captured = capsys.readouterr()
-        assert "Skipping marker with missing coordinates or timestamp" in captured.out
+        assert "Skipping marker 0 with missing coordinates or timestamp" in captured.out
 
         with open(str(out), 'r') as f:
             result_gpx = gpxpy.parse(f)
@@ -325,7 +325,7 @@ def test_marker_invalid_date_type(capsys):
 
         assert success is True
         captured = capsys.readouterr()
-        assert "Skipping marker with invalid timestamp" in captured.out
+        assert "Skipping marker 0 with invalid timestamp" in captured.out
 
         with open(str(out), 'r') as f:
             result_gpx = gpxpy.parse(f)
@@ -379,7 +379,7 @@ def test_marker_missing_coordinates(capsys):
         converter.convert(str(src), str(out))
 
         captured = capsys.readouterr()
-        assert "Skipping marker with missing coordinates or timestamp" in captured.out
+        assert "Skipping marker 0 with missing coordinates or timestamp" in captured.out
 
         with open(str(out), 'r') as f:
             result_gpx = gpxpy.parse(f)

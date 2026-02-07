@@ -4,7 +4,7 @@ A collection of standalone Python command-line tools for working with GPX files 
 
 ## Requirements
 
-- Python 3.6 or higher
+- Python 3.8 or higher
 - [gpxpy](https://pypi.org/project/gpxpy/)
 
 ```bash
