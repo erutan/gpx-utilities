@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for gpx_from_radiacode."""
 
+import copy
 import json
 import sys
 import tempfile
@@ -64,6 +65,16 @@ SAMPLE_RCTRK_SV_MODE = {
 def _write_rctrk(path, data):
     """Write a .rctrk JSON file."""
     path.write_text(json.dumps(data), encoding='utf-8')
+
+
+@pytest.fixture
+def rctrk_env(tmp_path):
+    """Provide a temp directory with paths and a write helper."""
+    src = tmp_path / "track.rctrk"
+    out = tmp_path / "output.gpx"
+    def write(data=None):
+        _write_rctrk(src, data if data is not None else SAMPLE_RCTRK)
+    return src, out, write
 
 
 # --- Basic conversion tests ---
@@ -231,7 +242,7 @@ def test_missing_markers():
 def test_empty_markers():
     with tempfile.TemporaryDirectory() as tmpdir:
         src = Path(tmpdir) / "track.rctrk"
-        data = dict(SAMPLE_RCTRK)
+        data = copy.deepcopy(SAMPLE_RCTRK)
         data['markers'] = []
         _write_rctrk(src, data)
         out = Path(tmpdir) / "output.gpx"
@@ -373,6 +384,67 @@ def test_marker_missing_coordinates(capsys):
         with open(str(out), 'r') as f:
             result_gpx = gpxpy.parse(f)
         assert len(result_gpx.tracks[0].segments[0].points) == 1
+
+
+def test_marker_out_of_range_coordinates(capsys):
+    """Markers with out-of-range lat/lon should be skipped."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "track.rctrk"
+        data = {
+            "devices": ["RC-103"],
+            "sv": False,
+            "periods": [],
+            "markers": [
+                {"lat": 91.0, "lon": -110.98, "date": 1769636251,
+                 "countRate": 5.0, "doseRate": 8.0, "acc": 3},
+                {"lat": 33.87, "lon": -181.0, "date": 1769636260,
+                 "countRate": 5.0, "doseRate": 8.0, "acc": 3},
+                {"lat": 33.87, "lon": -110.98, "date": 1769636300,
+                 "countRate": 6.0, "doseRate": 9.0, "acc": 4},
+            ],
+            "start": 1769636222,
+            "title": "Bad coords"
+        }
+        _write_rctrk(src, data)
+        out = Path(tmpdir) / "output.gpx"
+
+        converter = RadiacodeConverter(verbose=True)
+        converter.convert(str(src), str(out))
+
+        captured = capsys.readouterr()
+        assert "out-of-range coordinates" in captured.out
+
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.tracks[0].segments[0].points) == 1
+
+
+def test_marker_boundary_coordinates():
+    """Coordinates at exact boundaries (-90/90, -180/180) should be accepted."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "track.rctrk"
+        data = {
+            "devices": ["RC-103"],
+            "sv": False,
+            "periods": [],
+            "markers": [
+                {"lat": 90.0, "lon": 180.0, "date": 1769636251,
+                 "countRate": 5.0, "doseRate": 8.0, "acc": 3},
+                {"lat": -90.0, "lon": -180.0, "date": 1769636300,
+                 "countRate": 6.0, "doseRate": 9.0, "acc": 4},
+            ],
+            "start": 1769636222,
+            "title": "Boundary coords"
+        }
+        _write_rctrk(src, data)
+        out = Path(tmpdir) / "output.gpx"
+
+        converter = RadiacodeConverter()
+        converter.convert(str(src), str(out))
+
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.tracks[0].segments[0].points) == 2
 
 
 # --- Overwrite warning tests ---

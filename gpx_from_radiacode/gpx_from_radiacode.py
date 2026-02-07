@@ -77,6 +77,11 @@ class RadiacodeConverter:
                     print(f"Warning: Skipping marker with missing coordinates or timestamp")
                 continue
 
+            if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+                if self.verbose:
+                    print(f"Warning: Skipping marker with out-of-range coordinates ({lat}, {lon})")
+                continue
+
             try:
                 dt = datetime.fromtimestamp(date, tz=timezone.utc)
             except (TypeError, ValueError, OSError):

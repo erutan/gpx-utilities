@@ -45,7 +45,7 @@ See [gpx_from_radiacode/readme.md](gpx_from_radiacode/readme.md) for details.
 
 ## Testing
 
-The project includes a comprehensive test suite with 134 tests across all modules.
+The project includes a comprehensive test suite across all modules.
 
 ```bash
 pip install pytest
