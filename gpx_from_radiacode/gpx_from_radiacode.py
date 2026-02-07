@@ -34,7 +34,10 @@ class RadiacodeConverter:
 
     def _sort_markers(self, markers):
         """Sort markers chronologically by date."""
-        return sorted(markers, key=lambda m: m['date'])
+        def _sort_key(m):
+            date = m.get('date', 0)
+            return date if isinstance(date, (int, float)) else 0
+        return sorted(markers, key=_sort_key)
 
     def _format_rate(self, count_rate, dose_rate):
         """Format count and dose rates for display."""
@@ -46,43 +49,19 @@ class RadiacodeConverter:
         date_str = dt.strftime('%Y-%m-%d')
         return f"radiacode {date_str} {self._format_rate(self.max_count_rate, self.max_dose_rate)}"
 
-    def convert(self, input_file, output_file=None):
-        """Convert a .rctrk file to GPX format."""
-        self.total_points = 0
-        self.max_count_rate = 0.0
-        self.max_dose_rate = 0.0
-
-        try:
-            data = self._parse_rctrk(input_file)
-        except (json.JSONDecodeError, OSError, ValueError) as e:
-            print(f"Error reading track file: {e}", file=sys.stderr)
-            return False
-
-        markers = self._sort_markers(data['markers'])
-        self.total_points = len(markers)
-
-        # Find max readings
+    def _find_max_readings(self, markers):
+        """Scan markers for maximum count and dose rates."""
         for m in markers:
             if m.get('countRate', 0) > self.max_count_rate:
                 self.max_count_rate = m['countRate']
             if m.get('doseRate', 0) > self.max_dose_rate:
                 self.max_dose_rate = m['doseRate']
 
-        # Determine start timestamp
-        start_ts = data.get('start', markers[0]['date'])
-
-        if self.verbose:
-            print(f"Device: {', '.join(data.get('devices', ['unknown']))}")
-            print(f"Sievert mode: {data.get('sv', False)}")
-            print(f"Track points: {self.total_points}")
-            print(f"Max count rate: {self.max_count_rate} cps")
-            print(f"Max dose rate: {self.max_dose_rate} \u00b5Sv/h")
-
-        # Build GPX
+    def _build_gpx(self, markers, track_name):
+        """Build GPX object with track segment and optional waypoints from markers."""
         gpx = gpxpy.gpx.GPX()
         gpx.creator = 'gpx_from_radiacode'
 
-        track_name = self._build_track_name(start_ts)
         gpx_track = gpxpy.gpx.GPXTrack(name=track_name)
         gpx.tracks.append(gpx_track)
 
@@ -92,12 +71,18 @@ class RadiacodeConverter:
         for m in markers:
             lat = m.get('lat')
             lon = m.get('lon')
-            if lat is None or lon is None:
+            date = m.get('date')
+            if lat is None or lon is None or date is None:
                 if self.verbose:
-                    print(f"Warning: Skipping marker with missing coordinates")
+                    print(f"Warning: Skipping marker with missing coordinates or timestamp")
                 continue
 
-            dt = datetime.fromtimestamp(m['date'], tz=timezone.utc)
+            try:
+                dt = datetime.fromtimestamp(date, tz=timezone.utc)
+            except (TypeError, ValueError, OSError):
+                if self.verbose:
+                    print(f"Warning: Skipping marker with invalid timestamp: {date}")
+                continue
 
             point = gpxpy.gpx.GPXTrackPoint(
                 latitude=lat,
@@ -106,7 +91,6 @@ class RadiacodeConverter:
             )
             gpx_segment.points.append(point)
 
-            # Add waypoint if requested
             if self.waypoints:
                 count_rate = m.get('countRate', 0)
                 dose_rate = m.get('doseRate', 0)
@@ -118,36 +102,13 @@ class RadiacodeConverter:
                 )
                 gpx.waypoints.append(wpt)
 
-        # Zero-result warning
-        if len(gpx_segment.points) == 0:
-            print("Warning: No valid track points were generated", file=sys.stderr)
+        return gpx, gpx_segment
 
-        # Determine output path
-        if output_file is None:
-            p = Path(input_file)
-            output_file = p.parent / f"{p.stem}.gpx"
-
-        # Overwrite warning
-        if Path(output_file).exists():
-            print(f"Warning: Overwriting existing file '{output_file}'", file=sys.stderr)
-
-        # Write result
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(gpx.to_xml())
-
-        # Report results
-        print(f"\nConversion complete:")
-        print(f"  Track name: {track_name}")
-        print(f"  Track points: {len(gpx_segment.points)}")
-        if self.waypoints:
-            print(f"  Waypoints: {len(gpx.waypoints)}")
-        print(f"  Output saved to: {output_file}")
-
-        # Read-back verification
+    def _verify_output(self, output_file, expected_points, expected_waypoints):
+        """Read-back verification of the written GPX file."""
         try:
             with open(output_file, 'r', encoding='utf-8') as vf:
                 verify_gpx = gpxpy.parse(vf)
-            expected_points = len(gpx_segment.points)
             actual_points = sum(
                 len(seg.points)
                 for trk in verify_gpx.tracks
@@ -157,13 +118,72 @@ class RadiacodeConverter:
                 print(f"Warning: Read-back verification mismatch: wrote {expected_points} "
                       f"track points but read back {actual_points}", file=sys.stderr)
             if self.waypoints:
-                if len(verify_gpx.waypoints) != len(gpx.waypoints):
-                    print(f"Warning: Read-back verification mismatch: wrote {len(gpx.waypoints)} "
+                if len(verify_gpx.waypoints) != expected_waypoints:
+                    print(f"Warning: Read-back verification mismatch: wrote {expected_waypoints} "
                           f"waypoints but read back {len(verify_gpx.waypoints)}", file=sys.stderr)
         except Exception:
             print("Warning: Could not verify output file", file=sys.stderr)
 
-        return True
+    def convert(self, input_file, output_file=None):
+        """Convert a .rctrk file to GPX format."""
+        self.total_points = 0
+        self.max_count_rate = 0.0
+        self.max_dose_rate = 0.0
+
+        try:
+            data = self._parse_rctrk(input_file)
+
+            markers = self._sort_markers(data['markers'])
+            self.total_points = len(markers)
+            self._find_max_readings(markers)
+
+            # Determine start timestamp
+            start_ts = data.get('start')
+            if start_ts is None:
+                start_ts = markers[0].get('date', 0)
+
+            if self.verbose:
+                print(f"Device: {', '.join(data.get('devices', ['unknown']))}")
+                print(f"Sievert mode: {data.get('sv', False)}")
+                print(f"Track points: {self.total_points}")
+                print(f"Max count rate: {self.max_count_rate} cps")
+                print(f"Max dose rate: {self.max_dose_rate} \u00b5Sv/h")
+
+            track_name = self._build_track_name(start_ts)
+            gpx, gpx_segment = self._build_gpx(markers, track_name)
+
+            # Zero-result warning
+            if len(gpx_segment.points) == 0:
+                print("Warning: No valid track points were generated", file=sys.stderr)
+
+            # Determine output path
+            if output_file is None:
+                p = Path(input_file)
+                output_file = p.parent / f"{p.stem}.gpx"
+
+            # Overwrite warning
+            if Path(output_file).exists():
+                print(f"Warning: Overwriting existing file '{output_file}'", file=sys.stderr)
+
+            # Write result
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(gpx.to_xml())
+
+            # Report results
+            print(f"\nConversion complete:")
+            print(f"  Track name: {track_name}")
+            print(f"  Track points: {len(gpx_segment.points)}")
+            if self.waypoints:
+                print(f"  Waypoints: {len(gpx.waypoints)}")
+            print(f"  Output saved to: {output_file}")
+
+            self._verify_output(output_file, len(gpx_segment.points), len(gpx.waypoints))
+
+            return True
+
+        except (json.JSONDecodeError, OSError, ValueError) as e:
+            print(f"Error processing track file: {e}", file=sys.stderr)
+            return False
 
 
 def main():

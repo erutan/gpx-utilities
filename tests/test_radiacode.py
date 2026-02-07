@@ -258,6 +258,94 @@ def test_missing_file():
     assert success is False
 
 
+def test_marker_missing_date(capsys):
+    """Markers without a date field should be skipped gracefully."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "track.rctrk"
+        data = {
+            "devices": ["RC-103"],
+            "sv": False,
+            "periods": [],
+            "markers": [
+                {"lat": 33.87, "lon": -110.98, "countRate": 5.0, "doseRate": 8.0, "acc": 3},
+                {"lat": 33.88, "lon": -110.99, "date": 1769636300,
+                 "countRate": 6.0, "doseRate": 9.0, "acc": 4},
+            ],
+            "start": 1769636222,
+            "title": "No date"
+        }
+        _write_rctrk(src, data)
+        out = Path(tmpdir) / "output.gpx"
+
+        converter = RadiacodeConverter(verbose=True)
+        success = converter.convert(str(src), str(out))
+
+        assert success is True
+        captured = capsys.readouterr()
+        assert "Skipping marker with missing coordinates or timestamp" in captured.out
+
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.tracks[0].segments[0].points) == 1
+
+
+def test_marker_invalid_date_type(capsys):
+    """Markers with a non-numeric date should be skipped gracefully."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "track.rctrk"
+        data = {
+            "devices": ["RC-103"],
+            "sv": False,
+            "periods": [],
+            "markers": [
+                {"lat": 33.87, "lon": -110.98, "date": "not-a-timestamp",
+                 "countRate": 5.0, "doseRate": 8.0, "acc": 3},
+                {"lat": 33.88, "lon": -110.99, "date": 1769636300,
+                 "countRate": 6.0, "doseRate": 9.0, "acc": 4},
+            ],
+            "start": 1769636222,
+            "title": "Bad date"
+        }
+        _write_rctrk(src, data)
+        out = Path(tmpdir) / "output.gpx"
+
+        converter = RadiacodeConverter(verbose=True)
+        success = converter.convert(str(src), str(out))
+
+        assert success is True
+        captured = capsys.readouterr()
+        assert "Skipping marker with invalid timestamp" in captured.out
+
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.tracks[0].segments[0].points) == 1
+
+
+def test_all_markers_missing_date(capsys):
+    """All markers missing dates should produce zero-result warning."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "track.rctrk"
+        data = {
+            "devices": ["RC-103"],
+            "sv": False,
+            "periods": [],
+            "markers": [
+                {"lat": 33.87, "lon": -110.98, "countRate": 5.0, "doseRate": 8.0, "acc": 3},
+            ],
+            "start": 1769636222,
+            "title": "All bad"
+        }
+        _write_rctrk(src, data)
+        out = Path(tmpdir) / "output.gpx"
+
+        converter = RadiacodeConverter()
+        success = converter.convert(str(src), str(out))
+
+        assert success is True
+        captured = capsys.readouterr()
+        assert "No valid track points" in captured.err
+
+
 def test_marker_missing_coordinates(capsys):
     with tempfile.TemporaryDirectory() as tmpdir:
         src = Path(tmpdir) / "track.rctrk"
@@ -280,7 +368,7 @@ def test_marker_missing_coordinates(capsys):
         converter.convert(str(src), str(out))
 
         captured = capsys.readouterr()
-        assert "Skipping marker with missing coordinates" in captured.out
+        assert "Skipping marker with missing coordinates or timestamp" in captured.out
 
         with open(str(out), 'r') as f:
             result_gpx = gpxpy.parse(f)
