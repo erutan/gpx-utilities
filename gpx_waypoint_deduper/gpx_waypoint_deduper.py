@@ -96,10 +96,18 @@ class GPXDeduplicator:
 
             gpx.waypoints = unique_waypoints
 
+            # Zero-result warning
+            if len(unique_waypoints) == 0:
+                print("Warning: All waypoints were removed during deduplication", file=sys.stderr)
+
             # Determine output path
             if output_file is None:
                 p = Path(input_file)
                 output_file = p.parent / f"{p.stem}_dedup{p.suffix}"
+
+            # Overwrite warning
+            if Path(output_file).exists():
+                print(f"Warning: Overwriting existing file '{output_file}'", file=sys.stderr)
 
             # Write result
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -111,6 +119,16 @@ class GPXDeduplicator:
             print(f"  Duplicates removed: {self.duplicates_removed}")
             print(f"  Unique waypoints: {self.total_waypoints - self.duplicates_removed}")
             print(f"  Output saved to: {output_file}")
+
+            # Read-back verification
+            try:
+                with open(output_file, 'r', encoding='utf-8') as vf:
+                    verify_gpx = gpxpy.parse(vf)
+                if len(verify_gpx.waypoints) != len(unique_waypoints):
+                    print(f"Warning: Read-back verification mismatch: wrote {len(unique_waypoints)} "
+                          f"waypoints but read back {len(verify_gpx.waypoints)}", file=sys.stderr)
+            except Exception:
+                print("Warning: Could not verify output file", file=sys.stderr)
 
             return True
 
@@ -166,6 +184,11 @@ Examples:
 
     args = parser.parse_args()
 
+    # Validate precision range
+    if args.precision < 0 or args.precision > 8:
+        print(f"Error: Precision must be between 0 and 8, got {args.precision}", file=sys.stderr)
+        sys.exit(1)
+
     # Validate input
     input_path = Path(args.input)
     if not input_path.exists():
@@ -174,6 +197,11 @@ Examples:
 
     if not args.input.lower().endswith('.gpx'):
         print("Warning: Input file does not have .gpx extension", file=sys.stderr)
+
+    # Input=output guard (only when -o is explicitly provided)
+    if args.output and Path(args.input).resolve() == Path(args.output).resolve():
+        print("Error: Input and output resolve to the same file", file=sys.stderr)
+        sys.exit(1)
 
     # Process file
     dedup = GPXDeduplicator(

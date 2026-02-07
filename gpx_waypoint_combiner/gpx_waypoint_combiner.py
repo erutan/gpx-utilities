@@ -61,10 +61,19 @@ class GPXCombiner:
             print("No waypoints found in any file!")
             return False
 
+        # Warn about waypoints with null coordinates
+        for wpt in all_waypoints:
+            if wpt.latitude is None or wpt.longitude is None:
+                print(f"Warning: Waypoint '{wpt.name}' has null coordinates", file=sys.stderr)
+
         print(f"\nTotal waypoints collected: {len(all_waypoints)}")
 
         try:
             gpx = self.create_combined_gpx(all_waypoints, metadata)
+
+            # Warn if output file already exists
+            if Path(output_file).exists():
+                print(f"Warning: Overwriting existing file '{output_file}'", file=sys.stderr)
 
             with open(output_file, 'w', encoding='utf-8') as out_f:
                 out_f.write(gpx.to_xml())
@@ -76,6 +85,16 @@ class GPXCombiner:
                 print(f"Files that failed: {len(stats['failed'])}")
                 for f in stats['failed']:
                     print(f"  - {f}")
+
+            # Read-back verification
+            try:
+                with open(output_file, 'r', encoding='utf-8') as vf:
+                    verify_gpx = gpxpy.parse(vf)
+                if len(verify_gpx.waypoints) != len(all_waypoints):
+                    print(f"Warning: Read-back verification mismatch: wrote {len(all_waypoints)} "
+                          f"waypoints but read back {len(verify_gpx.waypoints)}", file=sys.stderr)
+            except Exception:
+                print("Warning: Could not verify output file", file=sys.stderr)
 
             return True
 
@@ -169,6 +188,19 @@ Advanced Combinations:
 
     # Collect input files
     input_files = collect_input_files(args)
+
+    # Self-inclusion guard: filter out the output file from collected inputs (directory mode)
+    output_resolved = Path(args.output).resolve()
+    original_count = len(input_files)
+    input_files = [f for f in input_files if Path(f).resolve() != output_resolved]
+    if len(input_files) < original_count:
+        print(f"Warning: Output file '{args.output}' was found in input list and excluded",
+              file=sys.stderr)
+
+    # Input=output guard: if only one input remains and it resolves to the output, abort
+    if len(input_files) == 1 and Path(input_files[0]).resolve() == output_resolved:
+        print("Error: Input and output resolve to the same file", file=sys.stderr)
+        sys.exit(1)
 
     if not input_files:
         print("Error: No input files specified or found", file=sys.stderr)

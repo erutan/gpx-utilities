@@ -19,6 +19,11 @@ def parse_gpx(gpx_file):
         waypoint_count = len(gpx.waypoints)
         print(f"Found {waypoint_count} waypoints in {gpx_file}")
 
+        # Warn about waypoints with null coordinates
+        for wpt in gpx.waypoints:
+            if wpt.latitude is None or wpt.longitude is None:
+                print(f"Warning: Waypoint '{wpt.name}' has null coordinates", file=sys.stderr)
+
         return gpx, waypoint_count
 
     except (gpxpy.gpx.GPXXMLSyntaxException, OSError) as e:
@@ -62,9 +67,25 @@ def create_output_files(gpx, output_prefix, waypoints_per_file=1000):
         # Create the output file name
         output_file = f"{output_prefix}_{file_num + 1:03d}.gpx"
 
+        # Overwrite warning
+        if Path(output_file).exists():
+            print(f"Warning: Overwriting existing file '{output_file}'", file=sys.stderr)
+
         # Write the new GPX file
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(new_gpx.to_xml())
+
+        # Read-back verification
+        try:
+            with open(output_file, 'r', encoding='utf-8') as vf:
+                verify_gpx = gpxpy.parse(vf)
+            expected_count = end_idx - start_idx
+            if len(verify_gpx.waypoints) != expected_count:
+                print(f"Warning: Read-back verification mismatch in '{output_file}': "
+                      f"wrote {expected_count} waypoints but read back "
+                      f"{len(verify_gpx.waypoints)}", file=sys.stderr)
+        except Exception:
+            print(f"Warning: Could not verify output file '{output_file}'", file=sys.stderr)
 
         waypoints_in_file = end_idx - start_idx
         total_written += waypoints_in_file
@@ -93,6 +114,11 @@ def main():
         parser.error("--waypoints-per-file must be a positive integer")
 
     gpx_file = args.input_file
+
+    # Input existence check
+    if not Path(gpx_file).exists():
+        print(f"Error: Input file '{gpx_file}' not found", file=sys.stderr)
+        sys.exit(1)
 
     # Use input filename as prefix if not specified
     output_prefix = args.output_prefix if args.output_prefix else Path(gpx_file).stem

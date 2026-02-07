@@ -217,3 +217,93 @@ def test_main_invalid_waypoints_per_file():
         with patch.object(sys, "argv", ["prog", str(src), "-w", "0"]):
             with pytest.raises(SystemExit):
                 main()
+
+
+# --- Input existence check tests ---
+
+
+def test_main_missing_input_file():
+    """Missing input file should exit with code 1."""
+    with patch.object(sys, "argv", ["prog", "/nonexistent/file.gpx"]):
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 1
+
+
+# --- Null coordinate warning tests ---
+
+
+def test_null_coordinate_warning(capsys):
+    """Waypoints with null coordinates should produce a stderr warning."""
+    import gpxpy.gpx as gpx_mod
+
+    null_wpt = gpx_mod.GPXWaypoint(name="NullPoint")
+    null_wpt.latitude = None
+    null_wpt.longitude = None
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a GPX with a null-coord waypoint
+        src = Path(tmpdir) / "input.gpx"
+        gpx = gpx_mod.GPX()
+        # gpxpy won't serialize null coords normally, so we use a valid wpt + patch
+        src.write_text(SAMPLE_GPX, encoding="utf-8")
+
+        # Patch the parse result to include a null-coord waypoint
+        original_parse = gpxpy.parse
+
+        def patched_parse(f):
+            gpx = original_parse(f)
+            null_wpt = gpx_mod.GPXWaypoint(name="NullPoint")
+            null_wpt.latitude = None
+            null_wpt.longitude = None
+            gpx.waypoints.append(null_wpt)
+            return gpx
+
+        with patch('gpx_waypoint_splitter.gpx_waypoint_splitter.gpxpy.parse', side_effect=patched_parse):
+            gpx_result, count = parse_gpx(str(src))
+
+        captured = capsys.readouterr()
+        assert "has null coordinates" in captured.err
+
+
+# --- Overwrite warning tests ---
+
+
+def test_overwrite_warning(capsys):
+    """Writing to an existing file should produce a stderr warning."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "input.gpx"
+        src.write_text(SAMPLE_GPX, encoding="utf-8")
+
+        gpx, count = parse_gpx(str(src))
+        prefix = str(Path(tmpdir) / "out")
+
+        # Create first set of output files
+        create_output_files(gpx, prefix, waypoints_per_file=1000)
+
+        # Re-parse (gpx object waypoints may be consumed)
+        gpx2, count2 = parse_gpx(str(src))
+
+        # Run again to trigger overwrite
+        create_output_files(gpx2, prefix, waypoints_per_file=1000)
+
+        captured = capsys.readouterr()
+        assert "Overwriting existing file" in captured.err
+
+
+# --- Read-back verification tests ---
+
+
+def test_readback_no_spurious_warning(capsys):
+    """Normal operation should not produce a read-back warning."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = Path(tmpdir) / "input.gpx"
+        src.write_text(SAMPLE_GPX, encoding="utf-8")
+
+        gpx, count = parse_gpx(str(src))
+        prefix = str(Path(tmpdir) / "out")
+        create_output_files(gpx, prefix, waypoints_per_file=2)
+
+        captured = capsys.readouterr()
+        assert "Read-back verification mismatch" not in captured.err
+        assert "Could not verify" not in captured.err

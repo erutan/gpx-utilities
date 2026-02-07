@@ -260,3 +260,120 @@ def test_main_no_input_files():
             with pytest.raises(SystemExit) as exc:
                 main()
             assert exc.value.code == 1
+
+
+# --- Self-inclusion guard tests ---
+
+
+def test_self_inclusion_guard_filters_output(capsys):
+    """Output file in directory mode should be excluded from inputs."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a = Path(tmpdir) / "a.gpx"
+        out = Path(tmpdir) / "combined.gpx"
+        a.write_text(SAMPLE_GPX_A, encoding="utf-8")
+        out.write_text(SAMPLE_GPX_B, encoding="utf-8")
+
+        with patch.object(sys, "argv", ["prog", "-d", tmpdir, "-o", str(out)]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+            assert exc.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "was found in input list and excluded" in captured.err
+
+
+def test_self_inclusion_guard_no_false_positive(capsys):
+    """Output file not in directory should not trigger self-inclusion warning."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a = Path(tmpdir) / "a.gpx"
+        a.write_text(SAMPLE_GPX_A, encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as outdir:
+            out = Path(outdir) / "combined.gpx"
+
+            with patch.object(sys, "argv", ["prog", "-d", tmpdir, "-o", str(out)]):
+                with pytest.raises(SystemExit) as exc:
+                    main()
+                assert exc.value.code == 0
+
+            captured = capsys.readouterr()
+            assert "was found in input list and excluded" not in captured.err
+
+
+# --- Input=output guard tests ---
+
+
+def test_input_equals_output_guard(capsys):
+    """Single input file that resolves to same path as output should be caught."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a = Path(tmpdir) / "a.gpx"
+        a.write_text(SAMPLE_GPX_A, encoding="utf-8")
+
+        with patch.object(sys, "argv", ["prog", str(a), "-o", str(a)]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+            assert exc.value.code == 1
+
+        captured = capsys.readouterr()
+        # Self-inclusion guard catches this first
+        assert "was found in input list and excluded" in captured.err
+
+
+# --- Null coordinate warning tests ---
+
+
+def test_null_coordinate_warning(capsys):
+    """Waypoints with null coordinates should produce a stderr warning."""
+    combiner = GPXCombiner()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a GPX file with a null-coordinate waypoint via mock
+        a = Path(tmpdir) / "a.gpx"
+        a.write_text(SAMPLE_GPX_A, encoding="utf-8")
+        out = Path(tmpdir) / "combined.gpx"
+
+        import gpxpy.gpx as gpx_mod
+        null_wpt = gpx_mod.GPXWaypoint(name="NullPoint")
+        null_wpt.latitude = None
+        null_wpt.longitude = None
+
+        with patch.object(combiner, 'extract_waypoints', return_value=[null_wpt]):
+            combiner.combine_files([str(a)], str(out))
+
+        captured = capsys.readouterr()
+        assert "has null coordinates" in captured.err
+
+
+# --- Overwrite warning tests ---
+
+
+def test_overwrite_warning(capsys):
+    """Writing to an existing file should produce a stderr warning."""
+    combiner = GPXCombiner()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a = Path(tmpdir) / "a.gpx"
+        out = Path(tmpdir) / "combined.gpx"
+        a.write_text(SAMPLE_GPX_A, encoding="utf-8")
+        out.write_text("existing content", encoding="utf-8")
+
+        combiner.combine_files([str(a)], str(out))
+
+        captured = capsys.readouterr()
+        assert "Overwriting existing file" in captured.err
+
+
+# --- Read-back verification tests ---
+
+
+def test_readback_no_spurious_warning(capsys):
+    """Normal operation should not produce a read-back warning."""
+    combiner = GPXCombiner()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a = Path(tmpdir) / "a.gpx"
+        out = Path(tmpdir) / "combined.gpx"
+        a.write_text(SAMPLE_GPX_A, encoding="utf-8")
+
+        combiner.combine_files([str(a)], str(out))
+
+        captured = capsys.readouterr()
+        assert "Read-back verification mismatch" not in captured.err
+        assert "Could not verify" not in captured.err

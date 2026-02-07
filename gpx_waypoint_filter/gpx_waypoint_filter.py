@@ -136,11 +136,29 @@ def filter_waypoints(input_file: str, output_file: str, criteria: Dict[str, Any]
         unique_waypoints.add(waypoint_id)
 
         filtered_gpx.waypoints.append(waypoint)
-    
+
+    # Zero-result warning
+    if len(filtered_gpx.waypoints) == 0:
+        print("Warning: No waypoints matched the filter criteria", file=sys.stderr)
+
+    # Overwrite warning
+    if Path(output_file).exists():
+        print(f"Warning: Overwriting existing file '{output_file}'", file=sys.stderr)
+
     # Write filtered GPX to output file
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(filtered_gpx.to_xml())
-    
+
+    # Read-back verification
+    try:
+        with open(output_file, 'r', encoding='utf-8') as vf:
+            verify_gpx = gpxpy.parse(vf)
+        if len(verify_gpx.waypoints) != len(filtered_gpx.waypoints):
+            print(f"Warning: Read-back verification mismatch: wrote {len(filtered_gpx.waypoints)} "
+                  f"waypoints but read back {len(verify_gpx.waypoints)}", file=sys.stderr)
+    except Exception:
+        print("Warning: Could not verify output file", file=sys.stderr)
+
     return len(filtered_gpx.waypoints)
 
 
@@ -166,6 +184,18 @@ def validate_args(args: argparse.Namespace) -> None:
     # Validate longitude bounds
     if args.lon_min is not None and args.lon_max is not None and args.lon_min > args.lon_max:
         sys.exit(f"Error: lon-min ({args.lon_min}) must be less than lon-max ({args.lon_max})")
+
+    # Validate coordinate ranges
+    for val, name in [(args.lat_min, 'lat-min'), (args.lat_max, 'lat-max')]:
+        if val is not None and (val < -90 or val > 90):
+            sys.exit(f"Error: {name} ({val}) must be between -90 and 90")
+    for val, name in [(args.lon_min, 'lon-min'), (args.lon_max, 'lon-max')]:
+        if val is not None and (val < -180 or val > 180):
+            sys.exit(f"Error: {name} ({val}) must be between -180 and 180")
+
+    # Input=output guard
+    if Path(args.input_file).resolve() == Path(args.output_file).resolve():
+        sys.exit("Error: Input and output resolve to the same file")
 
 
 def print_verbose_info(args: argparse.Namespace) -> None:
