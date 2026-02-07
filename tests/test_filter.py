@@ -275,8 +275,8 @@ def test_filter_waypoints_deduplicates():
         assert count == 1  # deduped
 
 
-def test_filter_waypoints_preserves_extensions():
-    """Verify deepcopy preserves all attributes."""
+def test_filter_waypoints_preserves_attributes():
+    """Verify filtered waypoints preserve all attributes."""
     with tempfile.TemporaryDirectory() as tmpdir:
         src = Path(tmpdir) / "input.gpx"
         out = Path(tmpdir) / "output.gpx"

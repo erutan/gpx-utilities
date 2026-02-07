@@ -4,11 +4,11 @@
 import argparse
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import gpxpy
 
 from gpx_waypoint_combiner.gpx_waypoint_combiner import GPXCombiner, collect_input_files, main
 
@@ -91,10 +91,9 @@ def test_combine_files():
         assert success is True
         assert out.exists()
 
-        tree = ET.parse(str(out))
-        root = tree.getroot()
-        wpts = root.findall(".//{http://www.topografix.com/GPX/1/1}wpt")
-        assert len(wpts) == 3
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.waypoints) == 3
 
 
 def test_combine_files_with_metadata():
@@ -108,11 +107,10 @@ def test_combine_files_with_metadata():
         success = combiner.combine_files([str(a)], str(out), metadata=metadata)
         assert success is True
 
-        tree = ET.parse(str(out))
-        root = tree.getroot()
-        name = root.find(".//{http://www.topografix.com/GPX/1/1}name")
-        assert name is not None
-        assert name.text == "Test Trip"
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert result_gpx.name == "Test Trip"
+        assert result_gpx.description == "A test collection"
 
 
 def test_combine_files_no_waypoints():
@@ -150,25 +148,9 @@ def test_create_combined_gpx_no_metadata():
         f.flush()
         wpts = combiner.extract_waypoints(f.name)
 
-    root = combiner.create_combined_gpx(wpts, metadata=None)
-    assert root.get("version") == "1.1"
-
-
-def test_indent_empty_element():
-    combiner = GPXCombiner()
-    elem = ET.Element("test")
-    combiner.indent(elem, level=1)
-    assert elem.tail == "\n  "
-
-
-def test_indent_with_children():
-    combiner = GPXCombiner()
-    parent = ET.Element("parent")
-    ET.SubElement(parent, "child1")
-    ET.SubElement(parent, "child2")
-    combiner.indent(parent)
-    assert parent.text is not None
-    assert "\n" in parent.text
+    gpx = combiner.create_combined_gpx(wpts, metadata=None)
+    assert gpx.creator == "GPX Waypoint Combiner"
+    assert len(gpx.waypoints) == 1
 
 
 def test_collect_input_files_directory():

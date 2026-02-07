@@ -3,9 +3,11 @@
 
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
+import gpxpy
 
 from gpx_waypoint_splitter.gpx_waypoint_splitter import parse_gpx, create_output_files, main
 
@@ -48,27 +50,27 @@ def test_parse_gpx_finds_waypoints():
     with tempfile.NamedTemporaryFile(suffix=".gpx", mode="w", delete=False) as f:
         f.write(SAMPLE_GPX)
         f.flush()
-        waypoints, header, ns, count = parse_gpx(f.name)
+        gpx, count = parse_gpx(f.name)
     assert count == 3
-    assert len(waypoints) == 3
+    assert len(gpx.waypoints) == 3
 
 
 def test_parse_gpx_no_namespace():
     with tempfile.NamedTemporaryFile(suffix=".gpx", mode="w", delete=False) as f:
         f.write(SAMPLE_GPX_NO_NS)
         f.flush()
-        waypoints, header, ns, count = parse_gpx(f.name)
+        gpx, count = parse_gpx(f.name)
     assert count == 2
-    assert ns == {}
+    assert len(gpx.waypoints) == 2
 
 
 def test_parse_gpx_empty_file():
     with tempfile.NamedTemporaryFile(suffix=".gpx", mode="w", delete=False) as f:
         f.write(SAMPLE_GPX_EMPTY)
         f.flush()
-        waypoints, header, ns, count = parse_gpx(f.name)
+        gpx, count = parse_gpx(f.name)
     assert count == 0
-    assert len(waypoints) == 0
+    assert len(gpx.waypoints) == 0
 
 
 def test_parse_gpx_invalid_file():
@@ -89,9 +91,9 @@ def test_split_creates_correct_number_of_files():
         src = Path(tmpdir) / "input.gpx"
         src.write_text(SAMPLE_GPX, encoding="utf-8")
 
-        waypoints, header, ns, count = parse_gpx(str(src))
+        gpx, count = parse_gpx(str(src))
         prefix = str(Path(tmpdir) / "out")
-        total = create_output_files(waypoints, header, ns, prefix, waypoints_per_file=2)
+        total = create_output_files(gpx, prefix, waypoints_per_file=2)
 
         assert total == 3
         assert (Path(tmpdir) / "out_001.gpx").exists()
@@ -103,9 +105,9 @@ def test_split_single_file_when_all_fit():
         src = Path(tmpdir) / "input.gpx"
         src.write_text(SAMPLE_GPX, encoding="utf-8")
 
-        waypoints, header, ns, count = parse_gpx(str(src))
+        gpx, count = parse_gpx(str(src))
         prefix = str(Path(tmpdir) / "out")
-        total = create_output_files(waypoints, header, ns, prefix, waypoints_per_file=1000)
+        total = create_output_files(gpx, prefix, waypoints_per_file=1000)
 
         assert total == 3
         assert (Path(tmpdir) / "out_001.gpx").exists()
@@ -117,16 +119,14 @@ def test_split_with_metadata_preserves_non_waypoint_elements():
         src = Path(tmpdir) / "input.gpx"
         src.write_text(SAMPLE_GPX_WITH_METADATA, encoding="utf-8")
 
-        waypoints, header, ns, count = parse_gpx(str(src))
+        gpx, count = parse_gpx(str(src))
         prefix = str(Path(tmpdir) / "out")
-        total = create_output_files(waypoints, header, ns, prefix, waypoints_per_file=1000)
+        total = create_output_files(gpx, prefix, waypoints_per_file=1000)
 
         assert total == 2
-        tree = ET.parse(str(Path(tmpdir) / "out_001.gpx"))
-        root = tree.getroot()
-        # Should contain metadata element
-        metadata = root.findall(".//{http://www.topografix.com/GPX/1/1}metadata")
-        assert len(metadata) == 1
+        with open(str(Path(tmpdir) / "out_001.gpx"), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert result_gpx.name == "Test"
 
 
 def test_split_empty_waypoints():
@@ -134,9 +134,9 @@ def test_split_empty_waypoints():
         src = Path(tmpdir) / "input.gpx"
         src.write_text(SAMPLE_GPX_EMPTY, encoding="utf-8")
 
-        waypoints, header, ns, count = parse_gpx(str(src))
+        gpx, count = parse_gpx(str(src))
         prefix = str(Path(tmpdir) / "out")
-        total = create_output_files(waypoints, header, ns, prefix, waypoints_per_file=1000)
+        total = create_output_files(gpx, prefix, waypoints_per_file=1000)
 
         assert total == 0
         assert not (Path(tmpdir) / "out_001.gpx").exists()
@@ -147,15 +147,14 @@ def test_split_output_files_contain_valid_xml():
         src = Path(tmpdir) / "input.gpx"
         src.write_text(SAMPLE_GPX, encoding="utf-8")
 
-        waypoints, header, ns, count = parse_gpx(str(src))
+        gpx, count = parse_gpx(str(src))
         prefix = str(Path(tmpdir) / "out")
-        create_output_files(waypoints, header, ns, prefix, waypoints_per_file=1)
+        create_output_files(gpx, prefix, waypoints_per_file=1)
 
         for i in range(1, 4):
-            tree = ET.parse(str(Path(tmpdir) / f"out_{i:03d}.gpx"))
-            root = tree.getroot()
-            wpts = root.findall(".//{http://www.topografix.com/GPX/1/1}wpt")
-            assert len(wpts) == 1
+            with open(str(Path(tmpdir) / f"out_{i:03d}.gpx"), 'r') as f:
+                result_gpx = gpxpy.parse(f)
+            assert len(result_gpx.waypoints) == 1
 
 
 def test_main_basic(capsys):
@@ -218,7 +217,3 @@ def test_main_invalid_waypoints_per_file():
         with patch.object(sys, "argv", ["prog", str(src), "-w", "0"]):
             with pytest.raises(SystemExit):
                 main()
-
-
-# Import pytest at the top level for the raises usage
-import pytest

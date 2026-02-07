@@ -6,7 +6,6 @@ Supports complex AND/OR logic between different filter groups.
 """
 
 import argparse
-import copy
 import sys
 from pathlib import Path
 from typing import Set, List, Optional, Dict, Any
@@ -136,8 +135,7 @@ def filter_waypoints(input_file: str, output_file: str, criteria: Dict[str, Any]
         
         unique_waypoints.add(waypoint_id)
 
-        # Deep copy to preserve all attributes including extensions
-        filtered_gpx.waypoints.append(copy.deepcopy(waypoint))
+        filtered_gpx.waypoints.append(waypoint)
     
     # Write filtered GPX to output file
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -153,10 +151,10 @@ def validate_args(args: argparse.Namespace) -> None:
         sys.exit(f"Error: Input file '{args.input_file}' not found")
     
     # Check that at least one filter criterion is specified
-    has_criteria = any([
+    has_criteria = any((
         args.name_contains, args.sym_contains, args.time_contains,
         args.lat_min, args.lat_max, args.lon_min, args.lon_max
-    ])
+    ))
     
     if not has_criteria:
         sys.exit("Error: At least one filter criterion must be specified")

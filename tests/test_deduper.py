@@ -3,11 +3,11 @@
 
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import gpxpy
 
 from gpx_waypoint_deduper.gpx_waypoint_deduper import GPXDeduplicator, main
 
@@ -59,10 +59,9 @@ def test_dedup_removes_duplicate():
         assert dedup.duplicates_removed == 1
         assert dedup.total_waypoints == 3
 
-        tree = ET.parse(str(out))
-        root = tree.getroot()
-        wpts = root.findall(".//wpt")
-        assert len(wpts) == 2
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.waypoints) == 2
 
 
 def test_dedup_no_duplicates():
@@ -103,10 +102,9 @@ def test_dedup_name_strategy():
         assert success is True
         assert dedup.duplicates_removed == 1
 
-        tree = ET.parse(str(out))
-        root = tree.getroot()
-        wpts = root.findall(".//wpt")
-        assert len(wpts) == 2
+        with open(str(out), 'r') as f:
+            result_gpx = gpxpy.parse(f)
+        assert len(result_gpx.waypoints) == 2
 
 
 def test_dedup_time_strategy():
